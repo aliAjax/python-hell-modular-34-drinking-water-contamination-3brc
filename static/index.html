@@ -1,5 +1,14 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>饮用水污染响应</title><body><h1>市政饮用水污染响应</h1><p>使用 JSON API 创建污染事件、登记水源或管网记录，并完成复检、通知、冲洗、消毒和恢复。</p><pre>GET /health
-GET /api/state
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>饮用水污染响应</title><body><h1>市政饮用水污染响应</h1><p>使用 JSON API 创建污染事件、登记应急水源并按申请顺序占用容量，完成片区送水、回滚与事件关闭释放。</p><pre>GET  /health
+GET  /api/state
+GET  /api/items
 POST /api/items
 POST /api/items/{id}/sources
-POST /api/items/{id}/actions</pre></body></html>
+POST /api/items/{id}/actions
+GET  /api/water-sources
+POST /api/water-sources
+GET  /api/water-sources/{ref}
+GET  /api/items/{id}/allocations
+POST /api/items/{id}/allocations
+GET  /api/items/{id}/zone-progress
+GET  /api/allocations/{id}
+POST /api/allocations/{id}/deliver</pre><p>调度账说明：申请按先后占用水源容量；容量不足时只落能执行的片区并返回未排上原因；送水失败仅回滚该片区，已送达保留；事件关闭后未执行占用立即释放。重复请求沿用首次调度单。</p></body></html>

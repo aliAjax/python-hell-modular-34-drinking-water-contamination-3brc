@@ -58,6 +58,16 @@ def build_handler(service, static_dir):
                 if len(parts) == 4 and parts[:2] == ["api", "items"] and parts[3] == "audit":
                     item = service.get_item(int(parts[2]))
                     return self._send(200, {"events": item["audit"]})
+                if parts == ["api", "water-sources"]:
+                    return self._send(200, {"water_sources": service.list_water_sources()})
+                if len(parts) == 3 and parts[:2] == ["api", "water-sources"]:
+                    return self._send(200, service.get_water_source(parts[2]))
+                if len(parts) == 4 and parts[:2] == ["api", "items"] and parts[3] == "allocations":
+                    return self._send(200, {"allocations": service.list_allocations(int(parts[2]))})
+                if len(parts) == 4 and parts[:2] == ["api", "items"] and parts[3] == "zone-progress":
+                    return self._send(200, {"zones": service.zone_progress(int(parts[2]))})
+                if len(parts) == 3 and parts[:2] == ["api", "allocations"]:
+                    return self._send(200, service.get_allocation(int(parts[2])))
                 if path == "/":
                     file_path = os.path.join(static_dir, "index.html")
                     with open(file_path, "rb") as handle:
@@ -78,8 +88,15 @@ def build_handler(service, static_dir):
                 parts = [part for part in path.split("/") if part]
                 if parts == ["api", "items"]:
                     return self._send(201, service.create_item(payload, actor, role, region))
+                if parts == ["api", "water-sources"]:
+                    return self._send(201, service.create_water_source(payload, actor, role))
                 if len(parts) == 4 and parts[:2] == ["api", "items"] and parts[3] == "sources":
                     return self._send(201, service.add_source(int(parts[2]), payload, actor, role, region))
+                if len(parts) == 4 and parts[:2] == ["api", "items"] and parts[3] == "allocations":
+                    expected = payload.pop("expected_version", None)
+                    return self._send(201, service.create_allocation(int(parts[2]), payload, actor, role, expected))
+                if len(parts) == 4 and parts[:2] == ["api", "allocations"] and parts[3] == "deliver":
+                    return self._send(200, service.deliver_zone(int(parts[2]), payload, actor, role))
                 if len(parts) == 4 and parts[:2] == ["api", "items"] and parts[3] == "actions":
                     action = payload.pop("action", "")
                     if not action:

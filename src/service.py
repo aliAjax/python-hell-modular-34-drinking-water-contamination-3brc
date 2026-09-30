@@ -1,5 +1,12 @@
 from . import domain, rules
-from .domain import DomainError
+from .domain import DomainError, require_text
+from .allocation import (
+    ALLOCATION_ROLES,
+    DELIVERY_ROLES,
+    SOURCE_MANAGE_ROLES,
+    normalize_allocation_create,
+    normalize_source_create,
+)
 
 
 class Service:
@@ -60,6 +67,8 @@ class Service:
         item["sources"] = self.repository.list_sources(item_id)
         item["audit"] = self.repository.audit_trail(item_id)
         item["assessment"] = rules.assess(item["payload"])
+        # 兼容旧数据：升级前只有一个备用源字段，仍在响应记录中保留可查看
+        item["alternate_source_id"] = item["payload"].get("alternate_source_id")
         return item
 
     def list_items(self, status=None):
@@ -67,3 +76,68 @@ class Service:
 
     def state(self):
         return self.repository.state_summary()
+
+    # ---------------- 应急水源与调度账 ----------------
+
+    def create_water_source(self, payload, actor, role):
+        if not actor or not role:
+            raise DomainError("identity_required", "需要用户身份和角色", 401)
+        if role not in SOURCE_MANAGE_ROLES:
+            raise DomainError("forbidden", "当前角色不能登记应急水源", 403)
+        normalized = normalize_source_create(payload)
+        return self.repository.create_water_source(
+            normalized["external_id"],
+            normalized["name"],
+            normalized["capacity"],
+            normalized["unit"],
+            actor,
+            role,
+        )
+
+    def list_water_sources(self):
+        return self.repository.list_water_sources()
+
+    def get_water_source(self, ref):
+        return self.repository.get_water_source(ref)
+
+    def create_allocation(self, item_id, payload, actor, role, expected_version=None):
+        if not actor or not role:
+            raise DomainError("identity_required", "需要用户身份和角色", 401)
+        if role not in ALLOCATION_ROLES:
+            raise DomainError("forbidden", "当前角色不能申请应急水源调度", 403)
+        if expected_version is None:
+            raise DomainError("expected_version_required", "调度申请需要 expected_version", 400)
+        normalized = normalize_allocation_create(payload)
+        return self.repository.create_allocation(
+            item_id,
+            normalized["source_id"],
+            normalized["request_id"],
+            normalized["zones"],
+            normalized["note"],
+            actor,
+            role,
+            expected_version,
+        )
+
+    def list_allocations(self, item_id):
+        return self.repository.list_allocations(item_id)
+
+    def get_allocation(self, allocation_id):
+        return self.repository.get_allocation(allocation_id)
+
+    def deliver_zone(self, allocation_id, payload, actor, role):
+        if not actor or not role:
+            raise DomainError("identity_required", "需要用户身份和角色", 401)
+        if role not in DELIVERY_ROLES:
+            raise DomainError("forbidden", "当前角色不能执行送水确认", 403)
+        zone_id = require_text(payload, "zone_id")
+        success = bool(payload.get("success"))
+        reason = payload.get("reason", "")
+        if not success and not (isinstance(reason, str) and reason.strip()):
+            raise DomainError("reason_required", "送水失败需要填写原因", 400)
+        return self.repository.deliver_zone(
+            allocation_id, zone_id, success, reason.strip() if isinstance(reason, str) else "", actor, role
+        )
+
+    def zone_progress(self, item_id):
+        return self.repository.zone_progress(item_id)
