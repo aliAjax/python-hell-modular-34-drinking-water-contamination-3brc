@@ -91,3 +91,51 @@ def normalize_source(payload):
         "note": payload.get("note", ""),
     }
     return result
+
+
+# ---------------------------------------------------------------------------
+# 应急水源 / 调度单 / 片区送水
+# ---------------------------------------------------------------------------
+
+def normalize_water_source(payload):
+    code = require_text(payload, "code")
+    name = require_text(payload, "name")
+    capacity = number(payload, "capacity", 0.000001)
+    unit = payload.get("unit")
+    if not isinstance(unit, str) or not unit.strip():
+        unit = "tonne"
+    return {"code": code, "name": name, "capacity": capacity, "unit": unit.strip()}
+
+
+def normalize_dispatch(payload):
+    """调度申请：一个调度单包含若干片区及承诺量，片区即排队与回滚的最小单位。"""
+    order_no = require_text(payload, "order_no")
+    raw_zones = payload.get("zones")
+    if not isinstance(raw_zones, list) or not raw_zones:
+        raise DomainError("zones_required", "至少需要一个送水片区")
+    zones = []
+    seen = set()
+    for zone in raw_zones:
+        if not isinstance(zone, dict):
+            raise DomainError("invalid_zones", "片区必须是对象列表")
+        zone_id = require_text(zone, "zone_id")
+        if zone_id in seen:
+            raise DomainError("duplicate_zone", "同一调度单内片区不能重复：%s" % zone_id)
+        seen.add(zone_id)
+        quantity = number(zone, "quantity", 0.000001)
+        zones.append({"zone_id": zone_id, "quantity": quantity})
+    source_code = require_text(payload, "source_code")
+    return order_no, source_code, zones
+
+
+def normalize_delivery(payload):
+    result = payload.get("result")
+    if result not in ("delivered", "failed"):
+        raise DomainError("invalid_delivery_result", "result 必须是 delivered 或 failed")
+    delivered_qty = None
+    if "delivered_qty" in payload and payload.get("delivered_qty") is not None:
+        delivered_qty = number(payload, "delivered_qty", 0)
+    note = payload.get("note", "")
+    if not isinstance(note, str):
+        note = ""
+    return result, delivered_qty, note.strip()
